@@ -1,6 +1,8 @@
 # n-th-digit-of-pi
 
- ## Pascal Sebah : September 1999
+ ## Based on Pascal Sebah C++ Program
+ 
+ ## Pascal Sebah: September 1999
 
  ## Subject:
 
