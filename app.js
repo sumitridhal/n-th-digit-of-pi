@@ -1,251 +1,115 @@
-//Baesd on Pascal Sebah Algorithm
-
-/*
-** Pascal Sebah : September 1999
-**
-** Subject:
-**
-**    A very easy program to compute Pi with many digits.
-**    No optimisations, no tricks, just a basic program to learn how
-**    to compute in multiprecision.
-**
-** Formulae:
-**
-**    Pi/4 =    arctan(1/2)+arctan(1/3)                     (Hutton 1)
-**    Pi/4 =  2*arctan(1/3)+arctan(1/7)                     (Hutton 2)
-**    Pi/4 =  4*arctan(1/5)-arctan(1/239)                   (Machin)
-**    Pi/4 = 12*arctan(1/18)+8*arctan(1/57)-5*arctan(1/239) (Gauss)
-**
-**      with arctan(x) =  x - x^3/3 + x^5/5 - ...
-**
-**    The Lehmer's measure is the sum of the inverse of the decimal
-**    logarithm of the pk in the arctan(1/pk). The more the measure
-**    is small, the more the formula is efficient.
-**    For example, with Machin's formula:
-**
-**      E = 1/log10(5)+1/log10(239) = 1.852
-**
-** Data:
-**
-**    A big real (or multiprecision real) is defined in base B as:
-**      X = x(0) + x(1)/B^1 + ... + x(n-1)/B^(n-1)
-**      where 0<=x(i)<B
-**
-** Results: (PentiumII, 450Mhz)
-**
-**   Formula      :    Hutton 1  Hutton 2   Machin   Gauss
-**   Lehmer's measure:   5.418     3.280      1.852    1.786
-**
-**  1000   decimals:     0.2s      0.1s       0.06s    0.06s
-**  10000  decimals:    19.0s     11.4s       6.7s     6.4s
-**  100000 decimals:  1891.0s   1144.0s     785.0s   622.0s
-**
-** With a little work it's possible to reduce those computation
-** times by a factor 3 and more:
-**
-**     => Work with double instead of long and the base B can
-**        be choosen as 10^8
-**     => During the iterations the numbers you add are smaller
-**        and smaller, take this in account in the +, *, /
-**     => In the division of y=x/d, you may precompute 1/d and
-**        avoid multiplications in the loop (only with doubles)
-**     => MaxDiv may be increased to more than 3000 with doubles
-**     => ...
-*/
-
 const readline = require('readline');
+var Decimal = require('decimal.js');
+
+Decimal.config({
+  precision: 100
+});
 
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
 });
 
-mess = "";
-//10^11 seems to be the maximum
-//too high a figure for the base introduces errors
-Base = Math.pow(10, 11);
+function arctan(x) {
+  var y = x;
+  var yPrev = NaN;
+  var x2 = x.times(x);
+  var num = x;
+  var sign = -1;
 
-//num digits in each array item
-cellSize = Math.floor(Math.log(Base) / Math.LN10);
+  for (var k = 3; !y.equals(yPrev); k += 2) {
+    num = num.times(x2);
 
-//below is not used in this script
-a = Number.MAX_VALUE;
-MaxDiv = Math.floor(Math.sqrt(a));
+    yPrev = y;
+    y = (sign > 0) ? y.plus(num.div(k)) : y.minus(num.div(k));
+    sign = -sign;
+  }
 
-function makeArray(n, aX, Integer) {
-  var i = 0;
-  for (i = 1; i < n; i++)
-    aX[i] = null;
-  aX[0] = Integer;
+  return y;
 }
 
-function isEmpty(aX) {
-  var empty = true
-  for (i = 0; i < aX.length; i++)
-    if (aX[i])
-  {
-    empty = false;
-    break;
-  }
-  return empty;
+function factorial(n) {
+  var i = 2,
+    r = new Decimal(1);
+  for (; i <= n; r = r.times(i++));
+  return r;
 }
 
-//junior school math
 
-function Add(n, aX, aY) {
-  carry = 0
-  for (i = n - 1; i >= 0; i--) {
-    aX[i] += Number(aY[i]) + Number(carry);
-    if (aX[i] < Base)
-      carry = 0;
-    else {
-      carry = 1;
-      aX[i] = Number(aX[i]) - Number(Base);
-    }
-  }
+function Machin(n) {
+  n = Number(n)+1
 
+  var pi4th = new Decimal(4).times(arctan(new Decimal(1).div(5)))
+    .minus(arctan(new Decimal(1).div(239)));
+
+  return Decimal(4).times(pi4th).toSD(n);
 }
 
-//subtract
+function chudnovsky(digits) {
+  digits = Number(digits) + 1
 
-function Sub(n, aX, aY) {
-  for (i = n - 1; i >= 0; i--) {
-    aX[i] -= aY[i];
-    if (aX[i] < 0) {
-      if (i > 0) {
-        aX[i] += Base;
-        aX[i - 1]--;
-      }
-    }
+  // The number of decimal digits the algorithm generates per iteration.
+  var digits_per_iteration = 14.1816474627254776555;
+  var iterations = (digits / digits_per_iteration) + 1;
+
+  var a = new Decimal(13591409);
+  var b = new Decimal(545140134);
+  var c = new Decimal(-640320);
+
+  var numerator, denominator;
+  var sum = new Decimal(0);
+
+  for (var k = 0; k < iterations; k++) {
+
+    // (6k)! * (13591409 + 545140134k)
+    numerator = factorial(6 * k).times(a.plus(b.times(k)));
+
+    // (3k)! * (k!)^3 * -640320^(3k)
+    denominator = factorial(3 * k).times(factorial(k).pow(3)).times(c.pow(3 * k));
+
+    sum = sum.plus(numerator.div(denominator));
   }
+
+  // pi = ( sqrt(10005) * 426880 ) / sum
+  return Decimal.sqrt(10005).times(426880).div(sum).toSD(digits);
 }
 
-//multiply big number by "small" number
 
-function Mul(n, aX, iMult) {
-  carry = 0;
-  for (i = n - 1; i >= 0; i--) {
-    prod = (aX[i]) * iMult;
-    prod += carry;
-    if (prod >= Base) {
-      carry = Math.floor(prod / Base);
-      prod -= (carry * Base);
-    } else
-      carry = 0;
-    aX[i] = prod;
-  }
-}
+var Bailey_Borwein_Plouffe = function(n) {
+  n = Number(n)
+  // the Bailey-Borwein-Plouffe formula
+  var p16 = new Decimal(1);
+  var pi = new Decimal(0);
+  var precision = Decimal.precision;
 
-//divide big number by "small" number
+  var one = new Decimal(1);
+  var two = new Decimal(2);
+  var four = new Decimal(4);
+  var k8 = new Decimal(0);
 
-function Div(n, aX, iDiv, aY) {
-  carry = 0;
-  for (i = 0; i < n; i++) {
-    //add any previous carry
-    currVal = Number(aX[i]) + Number(carry * Base);
-    //divide
-    theDiv = Math.floor(currVal / iDiv);
-    //find next carry
-    carry = currVal - theDiv * iDiv;
-    //put the result of division in the current slot
-    aY[i] = theDiv;
-  }
-}
+  for (var k = new Decimal(0); k.lte(precision); k = k.plus(one)) {
+    // pi += 1/p16 * (4/(8*k + 1) - 2/(8*k + 4) - 1/(8*k + 5) - 1/(8*k+6));
+    // p16 *= 16;
+    //
+    // a little simpler:
+    // pi += p16 * (4/(8*k + 1) - 2/(8*k + 4) - 1/(8*k + 5) - 1/(8*k+6));
+    // p16 /= 16;
 
-//compute arctan
+    var f = four.div(k8.plus(1))
+      .minus(two.div(k8.plus(4)))
+      .minus(one.div(k8.plus(5)))
+      .minus(one.div(k8.plus(6)));
 
-function arctan(iAng, n, aX) {
-  iAng_squared = iAng * iAng;
-  k = 3; //k is the coefficient in the series 2n-1, 3,5..
-  sign = 0;
-  makeArray(n, aX, 0); //aX is aArctan
-  makeArray(n, aAngle, 1);
-  Div(n, aAngle, iAng, aAngle); //aAngle = 1/iAng, eg 1/5
-  Add(n, aX, aAngle); // aX = aAngle or long angle
-  while (!isEmpty(aAngle)) {
-    Div(n, aAngle, iAng_squared, aAngle); //aAngle=aAngle/iAng_squared, iAng_squared is iAng*iAng
-    //mess+="iAng="+iAng+"; aAngle="+aAngle+"<br>";
-    Div(n, aAngle, k, aDivK); /* aDivK = aAngle/k */
-    if (sign)
-      Add(n, aX, aDivK); /* aX = aX+aDivK */
-    else Sub(n, aX, aDivK); /* aX = aX-aDivK */
-    k += 2;
-    sign = 1 - sign;
-  }
-  mess += "aArctan=" + aArctan + "<br>";
-}
-
-// Calculate pi
-
-function calcPI(numDec) {
-  numDec = Number(numDec);
-  iAng = new Array(10);
-  coeff = new Array(10);
-  arrayLength = Math.ceil(1 + numDec / cellSize);
-  aPI = new Array(arrayLength);
-  aArctan = new Array(arrayLength);
-  aAngle = new Array(arrayLength);
-  aDivK = new Array(arrayLength);
-
-  //Pi/4 = 4*arctan(1/5)-arctan(1/239)
-
-  //coeff is an array of the coefficients
-
-  //the last item is 0!
-
-  coeff[0] = 4;
-  coeff[1] = -1;
-  coeff[2] = 0;
-
-  //iAng holds the angles, 5 for 1/5, etc
-
-  iAng[0] = 5;
-  iAng[1] = 239;
-  iAng[2] = 0;
-
-  makeArray(arrayLength, aPI, 0);
-
-  //Machin: Pi/4 = 4*arctan(1/5)-arctan(1/239)
-
-  makeArray(arrayLength, aAngle, 0);
-  makeArray(arrayLength, aDivK, 0);
-  for (var i = 0; coeff[i] != 0; i++) {
-    arctan(iAng[i], arrayLength, aArctan);
-    //multiply by coefficients of arctan
-    Mul(arrayLength, aArctan, Math.abs(coeff[i]));
-    //mess+="mi="+coeff[i]+"<br>";
-    if (coeff[i] > 0)
-      Add(arrayLength, aPI, aArctan);
-    else
-      Sub(arrayLength, aPI, aArctan);
-    //mess+="api="+aPI+"<br>";
+    pi = pi.plus(p16.times(f));
+    p16 = p16.div(16);
+    k8 = k8.plus(8);
   }
 
-  //we have calculated pi/4, so need to finally multiply
-  Mul(arrayLength, aPI, 4);
-  //we have now calculated PI, and need to format the answer
-  //to print it out
-  sPI = "";
-  tempPI = "";
-  //put the figures in the array into the string tempPI
-  for (i = 0; i < aPI.length; i++)
-  {
-    if (i > 0) {
-      aPI[i] = String(aPI[i]);
-      //ensure there are enough digits in each cell
-      //if not, pad with leading zeros
-      if (aPI[i].length < cellSize && i != 0) {
-        while (aPI[i].length < cellSize)
-          aPI[i] = "0" + aPI[i];
-      }
-      tempPI += aPI[i];
-    }
-  }
-  return '3.' + tempPI;
+  return pi.toFixed(Number(n));
 }
 
 rl.question('Enter n value: ', (n) => {
-  let pi = calcPI(n)
-  console.log(`PI: ${pi}`)
+  let res = chudnovsky(n)
+  console.log(`PI: ${res}`)
   rl.close()
 });
