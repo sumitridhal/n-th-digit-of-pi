@@ -32,10 +32,11 @@
 
  ##Results: (PentiumII, 450Mhz)
 
-  Formula|Hutton 1|Hutton 2|Machin|Gauss
-  Lehmer's measure|5.418|3.280|1.852|1.786
-  10000  decimals|19.0s|11.4s|6.7s|6.4s
-  100000 decimals|1891.0s|1144.0s|785.0s|622.0s
+  |Formula          |Hutton 1 |Hutton 2 |Machin |Gauss  |
+  |-----------------|---------|---------|-------|-------|
+  |Lehmer's measure |5.418    |3.280    |1.852  |1.786  |
+  |10000  decimals  |19.0s    |11.4s    |6.7s   |6.4s   |
+  |100000 decimals  |1891.0s  |1144.0s  |785.0s |622.0s |
 
  With a little work it's possible to reduce those computation
  times by a factor 3 and more:
